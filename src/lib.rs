@@ -1,3 +1,5 @@
+mod parse;
+
 use thiserror::Error;
 
 #[derive(Debug)]
