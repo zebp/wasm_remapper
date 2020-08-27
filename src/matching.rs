@@ -28,7 +28,13 @@ impl<'a, 'wasm> MatchingContext<'a, 'wasm> {
         let other_instructions = &other.instructions;
         let max_instructions = input_instructions.len().max(other_instructions.len());
 
-        // TODO: Do some checking to see if functions are even a potential match
+        if !self.does_signiture_match(other) {
+            return 0.0;
+        } else if self.options.require_exact_function_locals
+            && self.input.local_types != other.local_types
+        {
+            return 0.0;
+        }
 
         let matching_instruction_count = input_instructions
             .into_iter()
@@ -42,5 +48,10 @@ impl<'a, 'wasm> MatchingContext<'a, 'wasm> {
 
     fn do_instructions_match(&self, left: &Instruction, right: &Instruction) -> bool {
         todo!()
+    }
+
+    fn does_signiture_match(&self, other: &Function) -> bool {
+        let input = self.input;
+        input.param_types == other.param_types && input.return_type == other.return_type
     }
 }
