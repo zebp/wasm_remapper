@@ -1,7 +1,10 @@
-use crate::function::Function;
+mod function;
+
 use parity_wasm::elements::*;
 use std::convert::TryFrom;
 use thiserror::Error;
+
+pub use function::Function;
 
 #[derive(Debug, Error)]
 pub enum ParseError {

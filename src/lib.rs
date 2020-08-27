@@ -1,4 +1,3 @@
-mod function;
 mod parse;
 
 use thiserror::Error;
