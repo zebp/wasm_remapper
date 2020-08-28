@@ -52,11 +52,44 @@ impl<'a, 'wasm> MatchingContext<'a, 'wasm> {
     }
 
     fn do_instructions_match(&self, left: &Instruction, right: &Instruction) -> bool {
-        todo!()
+        let ingore_constant_data_section_pointers =
+            self.options.ingore_constant_data_section_pointers;
+
+        // TODO: Find a way to do this in a cleaner more modular way.
+        match (left, right) {
+            (Instruction::I32Store(_, left_offset), Instruction::I32Store(_, right_offset))
+                if ingore_constant_data_section_pointers =>
+            {
+                self.both_locations_in_data_regions(*left_offset, *right_offset)
+            }
+            (Instruction::I32Const(left_const), Instruction::I32Const(right_const))
+                if ingore_constant_data_section_pointers =>
+            {
+                let in_data_region =
+                    self.both_locations_in_data_regions(*left_const as u32, *right_const as u32);
+
+                in_data_region || left_const == right_const
+            }
+            (Instruction::CallIndirect(_, _), Instruction::CallIndirect(_, _)) => true,
+            (Instruction::Call(_), Instruction::Call(_)) => true,
+            (_, _) => left == right,
+        }
     }
 
     fn does_signiture_match(&self, input: &Function, other: &Function) -> bool {
         let input = input;
         input.param_types == other.param_types && input.return_type == other.return_type
+    }
+
+    fn both_locations_in_data_regions(&self, left: u32, right: u32) -> bool {
+        let left_inside = self
+            .data_regions
+            .iter()
+            .any(|region| region.is_offset_inside(left));
+        let right_inside = self
+            .data_regions
+            .iter()
+            .any(|region| region.is_offset_inside(right));
+        left_inside && right_inside
     }
 }

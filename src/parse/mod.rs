@@ -94,6 +94,12 @@ pub struct DataRegion {
     data: Vec<u8>,
 }
 
+impl DataRegion {
+    pub fn is_offset_inside(&self, offset: u32) -> bool {
+        offset >= self.start && offset <= self.end
+    }
+}
+
 impl TryFrom<&DataSegment> for DataRegion {
     type Error = ParseError;
 

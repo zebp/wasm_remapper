@@ -1,6 +1,9 @@
 mod matching;
 mod parse;
 
+use parity_wasm::elements::Module;
+use parse::ModuleInfo;
+use std::convert::TryFrom;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -19,6 +22,17 @@ impl<'wasm> Remapper<'wasm> {
             ingore_constant_data_section_pointers: true,
             require_exact_function_locals: true,
         }
+    }
+
+    pub fn remap(&self) -> Result<RemapperOutput, RemapperError> {
+        let input: Module = parity_wasm::deserialize_buffer(self.input)
+            .map_err(|_| RemapperError::InvalidInputBinary)?;
+        let reference: Module = parity_wasm::deserialize_buffer(self.input)
+            .map_err(|_| RemapperError::InvalidReferenceBinary)?;
+        let input = ModuleInfo::try_from(&input)?;
+        let reference = ModuleInfo::try_from(&reference)?;
+
+        todo!()
     }
 }
 
@@ -57,8 +71,15 @@ impl<'wasm> RemapperBuilder<'wasm> {
         self
     }
 
-    pub fn remap(&self) -> Result<RemapperOutput, RemapperError> {
-        todo!()
+    pub fn build(&self) -> Result<Remapper, RemapperError> {
+        Ok(Remapper {
+            input: self.input.ok_or(RemapperError::InvalidInputBinary)?,
+            reference: self
+                .reference
+                .ok_or(RemapperError::InvalidReferenceBinary)?,
+            ingore_constant_data_section_pointers: self.ingore_constant_data_section_pointers,
+            require_exact_function_locals: self.require_exact_function_locals,
+        })
     }
 }
 
@@ -74,6 +95,8 @@ pub enum RemapperError {
     InvalidInputBinary,
     #[error("reference wasm not a valid wasm binary")]
     InvalidReferenceBinary,
+    #[error("unable to parse {0}")]
+    Parse(#[from] parse::ParseError),
 }
 
 #[cfg(test)]
@@ -92,11 +115,13 @@ mod tests {
         let result = Remapper::builder()
             .input(&[])
             .reference(&reference)
+            .build()
+            .unwrap()
             .remap();
 
         match result {
-            Err(RemapperError::InvalidInputBinary) => {},
-            _ => panic!("unexpected result")
+            Err(RemapperError::InvalidInputBinary) => {}
+            _ => panic!("unexpected result"),
         }
     }
 
@@ -106,11 +131,13 @@ mod tests {
         let result = Remapper::builder()
             .input(&input)
             .reference(&[])
+            .build()
+            .unwrap()
             .remap();
 
         match result {
-            Err(RemapperError::InvalidReferenceBinary) => {},
-            _ => panic!("unexpected result")
+            Err(RemapperError::InvalidReferenceBinary) => {}
+            _ => panic!("unexpected result"),
         }
     }
 }
