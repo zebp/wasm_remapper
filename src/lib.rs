@@ -1,7 +1,8 @@
 mod matching;
 mod parse;
 
-use parity_wasm::elements::Module;
+use matching::MatchingContext;
+use parity_wasm::elements::*;
 use parse::ModuleInfo;
 use std::convert::TryFrom;
 use thiserror::Error;
@@ -27,12 +28,72 @@ impl<'wasm> Remapper<'wasm> {
     pub fn remap(&self) -> Result<RemapperOutput, RemapperError> {
         let input: Module = parity_wasm::deserialize_buffer(self.input)
             .map_err(|_| RemapperError::InvalidInputBinary)?;
-        let reference: Module = parity_wasm::deserialize_buffer(self.input)
+        let reference: Module = parity_wasm::deserialize_buffer::<Module>(self.reference)
+            .map_err(|_| RemapperError::InvalidReferenceBinary)?
+            .parse_names()
             .map_err(|_| RemapperError::InvalidReferenceBinary)?;
-        let input = ModuleInfo::try_from(&input)?;
-        let reference = ModuleInfo::try_from(&reference)?;
+        let input_info = ModuleInfo::try_from(&input)?;
+        let reference_info = ModuleInfo::try_from(&reference)?;
 
-        todo!()
+        let mut data_regions = input_info.data_regions.clone();
+        data_regions.extend(reference_info.data_regions.clone());
+
+        let match_ctx = MatchingContext::new(&data_regions, &self);
+        let name_map = self.build_name_map(&input_info, &reference_info, match_ctx);
+        let name_section = self.build_name_section(&input, name_map);
+
+        let mut output_module = input.clone();
+        output_module
+            .insert_section(Section::Name(name_section))
+            .expect("unable to insert custom name section into output module");
+        let output_module_buf =
+            parity_wasm::serialize(output_module).expect("unable to serialize output module");
+
+        Ok(RemapperOutput {
+            output: output_module_buf,
+        })
+    }
+
+    fn build_name_map(
+        &self,
+        input_info: &ModuleInfo,
+        reference_info: &ModuleInfo,
+        match_ctx: MatchingContext,
+    ) -> NameMap {
+        let mut name_map = NameMap::with_capacity(input_info.functions.len());
+        let mappings: Vec<_> = input_info
+            .functions
+            .iter()
+            .map(|input_func| {
+                let mut matches = match_ctx.find_matches(input_func, &reference_info.functions);
+                matches.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+                (input_func, matches)
+            })
+            .filter(|(_, match_weights)| match_weights.len() > 0)
+            .collect();
+
+        for (function, match_weights) in mappings {
+            let best_name = match_weights
+                .first()
+                .and_then(|(func, _)| func.name.clone());
+
+            if let Some(best_name) = best_name {
+                name_map.insert(function.id, best_name);
+            }
+        }
+
+        name_map
+    }
+
+    fn build_name_section(&self, module: &Module, name_map: NameMap) -> NameSection {
+        let mut buffer = Vec::new();
+        name_map
+            .serialize(&mut buffer)
+            .expect("unable to build name section"); // This should never happen
+        let name_subsection =
+            FunctionNameSubsection::deserialize(module, &mut std::io::Cursor::new(buffer))
+                .expect("unable to build name section");
+        NameSection::new(None, Some(name_subsection), None)
     }
 }
 
@@ -111,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_invalid_input() {
-        let reference = read_wasm("empty");
+        let reference = read_wasm("simple.reference");
         let result = Remapper::builder()
             .input(&[])
             .reference(&reference)
@@ -127,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_invalid_empty_reference() {
-        let input = read_wasm("empty");
+        let input = read_wasm("simple.input");
         let result = Remapper::builder()
             .input(&input)
             .reference(&[])

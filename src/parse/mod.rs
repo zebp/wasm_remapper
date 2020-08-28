@@ -16,8 +16,8 @@ pub enum ParseError {
 
 #[derive(Debug)]
 pub struct ModuleInfo {
-    functions: Vec<Function>,
-    data_regions: Vec<DataRegion>,
+    pub functions: Vec<Function>,
+    pub data_regions: Vec<DataRegion>,
 }
 
 impl TryFrom<&Module> for ModuleInfo {
@@ -87,7 +87,7 @@ impl TryFrom<&Module> for ModuleInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataRegion {
     start: u32,
     end: u32,
