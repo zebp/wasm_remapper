@@ -40,7 +40,7 @@ impl<'wasm> Remapper<'wasm> {
 
         let match_ctx = MatchingContext::new(&data_regions, &self);
         let name_map = self.build_name_map(&input_info, &reference_info, match_ctx);
-        let name_section = self.build_name_section(&input, name_map);
+        let name_section = self.build_name_section(&input, name_map.clone());
 
         let mut output_module = input.clone();
         output_module
@@ -51,6 +51,7 @@ impl<'wasm> Remapper<'wasm> {
 
         Ok(RemapperOutput {
             output: output_module_buf,
+            names: name_map,
         })
     }
 
@@ -148,6 +149,8 @@ impl<'wasm> RemapperBuilder<'wasm> {
 pub struct RemapperOutput {
     /// A wasm binary with debug symbols added from the reference binary.
     output: Vec<u8>,
+    /// A map of function ids to their new names in the output binary.
+    names: NameMap,
 }
 
 #[derive(Debug, Error)]
