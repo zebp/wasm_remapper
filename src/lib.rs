@@ -148,9 +148,9 @@ impl<'wasm> RemapperBuilder<'wasm> {
 #[derive(Debug)]
 pub struct RemapperOutput {
     /// A wasm binary with debug symbols added from the reference binary.
-    output: Vec<u8>,
+    pub output: Vec<u8>,
     /// A map of function ids to their new names in the output binary.
-    names: NameMap,
+    pub names: NameMap,
 }
 
 #[derive(Debug, Error)]
@@ -203,5 +203,37 @@ mod tests {
             Err(RemapperError::InvalidReferenceBinary) => {}
             _ => panic!("unexpected result"),
         }
+    }
+
+    #[test]
+    fn test_remap_simple() {
+        let input = read_wasm("simple.input");
+        let reference = read_wasm("simple.reference");
+        let RemapperOutput { names, output } = Remapper::builder()
+            .input(&input)
+            .reference(&reference)
+            .build()
+            .unwrap()
+            .remap()
+            .unwrap();
+
+        // Assert name map of the remapped output is valid
+        assert_eq!(names.len(), 2);
+        assert_eq!(names.get(0).unwrap(), "square");
+        assert_eq!(names.get(1).unwrap(), "squareTen");
+
+        let output_module = parity_wasm::deserialize_buffer::<Module>(&output)
+            .expect("invalid output binary")
+            .parse_names()
+            .unwrap();
+        let output_name_map = output_module
+            .names_section()
+            .expect("no name section in output module")
+            .functions()
+            .expect("no function name subsection")
+            .names();
+
+        // Ensure that the proveded output names match the actual names in the binary
+        assert_eq!(&names, output_name_map);
     }
 }
