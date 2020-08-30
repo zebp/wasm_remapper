@@ -13,6 +13,7 @@ pub struct Remapper<'wasm> {
     reference: &'wasm [u8],
     ingore_constant_data_section_pointers: bool,
     require_exact_function_locals: bool,
+    matching_threshold: f32,
 }
 
 impl<'wasm> Remapper<'wasm> {
@@ -22,6 +23,7 @@ impl<'wasm> Remapper<'wasm> {
             reference: None,
             ingore_constant_data_section_pointers: true,
             require_exact_function_locals: true,
+            matching_threshold: None,
         }
     }
 
@@ -66,7 +68,11 @@ impl<'wasm> Remapper<'wasm> {
             .functions
             .iter()
             .map(|input_func| {
-                let mut matches = match_ctx.find_matches(input_func, &reference_info.functions);
+                let mut matches = match_ctx.find_matches(
+                    input_func,
+                    &reference_info.functions,
+                    self.matching_threshold,
+                );
                 matches.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
                 (input_func, matches)
             })
@@ -104,6 +110,7 @@ pub struct RemapperBuilder<'wasm> {
     reference: Option<&'wasm [u8]>,
     ingore_constant_data_section_pointers: bool,
     require_exact_function_locals: bool,
+    matching_threshold: Option<f32>,
 }
 
 impl<'wasm> RemapperBuilder<'wasm> {
@@ -133,6 +140,13 @@ impl<'wasm> RemapperBuilder<'wasm> {
         self
     }
 
+    /// How closely two functions have to match on a scale of 0 to 1 for them to be
+    /// considered a match good enough to be remapped with.
+    pub fn matching_threshold(mut self, threshold: f32) -> Self {
+        self.matching_threshold = Some(threshold);
+        self
+    }
+
     pub fn build(&self) -> Result<Remapper, RemapperError> {
         Ok(Remapper {
             input: self.input.ok_or(RemapperError::InvalidInputBinary)?,
@@ -141,6 +155,7 @@ impl<'wasm> RemapperBuilder<'wasm> {
                 .ok_or(RemapperError::InvalidReferenceBinary)?,
             ingore_constant_data_section_pointers: self.ingore_constant_data_section_pointers,
             require_exact_function_locals: self.require_exact_function_locals,
+            matching_threshold: self.matching_threshold.unwrap_or(0.0),
         })
     }
 }

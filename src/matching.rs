@@ -21,10 +21,12 @@ impl<'a, 'wasm> MatchingContext<'a, 'wasm> {
         &self,
         input: &Function,
         others: &'func [Function],
+        threshold: f32,
     ) -> Vec<(&'func Function, f32)> {
         others
             .into_iter()
             .map(|other| (other, self.get_match_weight_for(input, other)))
+            .filter(|(_, weight)| *weight >= threshold)
             .collect()
     }
 
